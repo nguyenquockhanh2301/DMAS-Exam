@@ -131,6 +131,71 @@ app.post('/api/createasset', async (req, res) => {
     }
 });
 
+    // Assign Asset To Player API
+    app.post('/api/assignasset', async (req, res) => {
+        const context = createContext();
+        context.log('Assign Asset API invoked');
+
+        try {
+            const body = req.body;
+            const { playerName, assetName } = body;
+
+            if (!playerName || !assetName) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields: playerName, assetName'
+                });
+            }
+
+            // Lookup player
+            const playerQuery = `SELECT PlayerId, ` + "`Level`" + ` as level FROM Player WHERE PlayerName = ?`;
+            const players = await executeQuery(playerQuery, [playerName]);
+            if (!players || players.length === 0) {
+                return res.status(404).json({ success: false, message: 'Player not found' });
+            }
+            const player = players[0];
+
+            // Lookup asset
+            const assetQuery = `SELECT AssetId, LevelRequire FROM Asset WHERE AssetName = ?`;
+            const assets = await executeQuery(assetQuery, [assetName]);
+            if (!assets || assets.length === 0) {
+                return res.status(404).json({ success: false, message: 'Asset not found' });
+            }
+            const asset = assets[0];
+
+            // Check level requirement
+            if (player.level < asset.LevelRequire) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Player level ${player.level} does not meet required level ${asset.LevelRequire} for this asset`
+                });
+            }
+
+            // Assign asset
+            const insertQuery = `INSERT INTO PlayerAsset (PlayerId, AssetId) VALUES (?, ?)`;
+            try {
+                await executeQuery(insertQuery, [player.PlayerId, asset.AssetId]);
+            } catch (err) {
+                if (err && err.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({ success: false, message: 'Asset already assigned to player' });
+                }
+                throw err;
+            }
+
+            context.log(`Assigned asset '${assetName}' to player '${playerName}'`);
+
+            res.status(201).json({
+                success: true,
+                message: 'Asset assigned to player successfully',
+                data: { playerName, assetName }
+            });
+
+        } catch (error) {
+            context.error('Error assigning asset:', error);
+            res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+        }
+    });
+
 // Get Assets By Player API
 app.get('/api/getassetsbyplayer', async (req, res) => {
     const context = createContext();
@@ -178,6 +243,40 @@ app.get('/api/getassetsbyplayer', async (req, res) => {
     }
 });
 
+// Get Players (for dropdowns)
+app.get('/api/getplayers', async (req, res) => {
+    const context = createContext();
+    context.log('Get Players API invoked');
+
+    try {
+        const query = `SELECT PlayerName FROM Player ORDER BY PlayerName`;
+        const results = await executeQuery(query);
+        const players = results.map(r => r.PlayerName);
+
+        res.status(200).json({ success: true, count: players.length, data: players });
+    } catch (error) {
+        context.error('Error fetching players:', error);
+        res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+});
+
+// Get Assets (for dropdowns)
+app.get('/api/getassets', async (req, res) => {
+    const context = createContext();
+    context.log('Get Assets API invoked');
+
+    try {
+        const query = `SELECT AssetName FROM Asset ORDER BY AssetName`;
+        const results = await executeQuery(query);
+        const assets = results.map(r => r.AssetName);
+
+        res.status(200).json({ success: true, count: assets.length, data: assets });
+    } catch (error) {
+        context.error('Error fetching assets:', error);
+        res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+});
+
 // Health check endpoint
 app.get('/', (req, res) => {
     res.json({
@@ -186,6 +285,7 @@ app.get('/', (req, res) => {
         endpoints: [
             'POST /api/registerplayer',
             'POST /api/createasset',
+            'POST /api/assignasset',
             'GET /api/getassetsbyplayer'
         ]
     });
@@ -203,6 +303,7 @@ app.listen(PORT, () => {
     console.log('Available endpoints:');
     console.log('  POST   http://localhost:' + PORT + '/api/registerplayer');
     console.log('  POST   http://localhost:' + PORT + '/api/createasset');
+    console.log('  POST   http://localhost:' + PORT + '/api/assignasset');
     console.log('  GET    http://localhost:' + PORT + '/api/getassetsbyplayer');
     console.log('');
     console.log('Press Ctrl+C to stop');

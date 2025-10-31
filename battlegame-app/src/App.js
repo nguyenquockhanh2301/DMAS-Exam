@@ -23,10 +23,34 @@ function App() {
     levelRequire: 1
   });
 
+  const [assignForm, setAssignForm] = useState({
+    playerName: '',
+    assetName: ''
+  });
+  const [playersList, setPlayersList] = useState([]);
+  const [assetsList, setAssetsList] = useState([]);
+
   const API_BASE_URL = 'http://localhost:7071/api';
+
+  // Fetch available players and assets for dropdowns
+  const fetchPlayersAndAssets = async () => {
+    try {
+      const [pResp, aResp] = await Promise.all([
+        axios.get(`${API_BASE_URL}/getplayers`),
+        axios.get(`${API_BASE_URL}/getassets`)
+      ]);
+
+      if (pResp.data?.success) setPlayersList(pResp.data.data || []);
+      if (aResp.data?.success) setAssetsList(aResp.data.data || []);
+    } catch (err) {
+      console.error('Error fetching players/assets:', err);
+      // non-fatal for UI; lists may be empty
+    }
+  };
 
   useEffect(() => {
     fetchPlayerAssets();
+    fetchPlayersAndAssets();
   }, []);
 
   const fetchPlayerAssets = async () => {
@@ -58,6 +82,7 @@ function App() {
         setMessage({ type: 'success', text: `Player "${newPlayer.playerName}" registered successfully!` });
         setNewPlayer({ playerName: '', fullName: '', age: '', level: 1, email: '' });
         fetchPlayerAssets();
+        fetchPlayersAndAssets();
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to register player';
@@ -75,6 +100,7 @@ function App() {
         setMessage({ type: 'success', text: `Asset "${newAsset.assetName}" created successfully!` });
         setNewAsset({ assetName: '', levelRequire: 1 });
         fetchPlayerAssets();
+        fetchPlayersAndAssets();
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to create asset';
@@ -104,6 +130,12 @@ function App() {
             onClick={() => { setActiveTab('asset'); setMessage(null); }}
           >
             ⚔️ Create Asset
+          </button>
+          <button 
+            className={`tab ${activeTab === 'assign' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('assign'); setMessage(null); }}
+          >
+            🧾 Assign Asset
           </button>
         </nav>
       </header>
@@ -279,6 +311,61 @@ function App() {
 
               <button type="submit" className="submit-btn">
                 ✓ Create Asset
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ASSIGN ASSET TAB */}
+        {activeTab === 'assign' && (
+          <div className="form-container">
+            <h2>Assign Asset To Player</h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                setMessage({ type: 'loading', text: 'Assigning asset...' });
+                const response = await axios.post(`${API_BASE_URL}/assignasset`, assignForm);
+                if (response.data.success) {
+                  setMessage({ type: 'success', text: response.data.message || 'Asset assigned successfully' });
+                  setAssignForm({ playerName: '', assetName: '' });
+                  fetchPlayerAssets();
+                  fetchPlayersAndAssets();
+                }
+              } catch (err) {
+                const errorMsg = err.response?.data?.message || 'Failed to assign asset';
+                setMessage({ type: 'error', text: errorMsg });
+              }
+            }}>
+              <div className="form-group">
+                <label>Player Name *</label>
+                <select
+                  value={assignForm.playerName}
+                  onChange={(e) => setAssignForm({...assignForm, playerName: e.target.value})}
+                  required
+                >
+                  <option value="">-- Select player --</option>
+                  {playersList.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Asset Name *</label>
+                <select
+                  value={assignForm.assetName}
+                  onChange={(e) => setAssignForm({...assignForm, assetName: e.target.value})}
+                  required
+                >
+                  <option value="">-- Select asset --</option>
+                  {assetsList.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button type="submit" className="submit-btn">
+                ✓ Assign Asset
               </button>
             </form>
           </div>
