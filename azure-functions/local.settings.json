@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "DB_HOST": "localhost",
+    "DB_USER": "root",
+    "DB_PASSWORD": "",
+    "DB_NAME": "BATTLEGAME",
+    "DB_PORT": "3306"
+  }
+}
